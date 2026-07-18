@@ -1,70 +1,53 @@
 {
-  "name": "@barchart/common-node-js",
-  "version": "4.74.1",
-  "description": "Common classes, utilities, and functions for building Node.js servers",
-  "author": {
-    "name": "Bryan Ingle",
-    "email": "bryan.ingle@barchart.com",
-    "url": "https://www.barchart.com"
-  },
-  "contributors": [
-    {
-      "name": "Luka Sotra",
-      "email": "luka.sotra@barchart.com",
-      "url": "https://www.barchart.com"
-    }
-  ],
+  "name": "common-node-js",
+  "version": "1.0.0",
+  "description": "Common Node.js application",
+  "main": "index.js",
+
   "scripts": {
-    "lint": "gulp lint",
-    "test": "jasmine --config=jasmine.json"
+    "start": "node index.js",
+    "lint": "jshint .",
+    "test": "jasmine"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+ssh://github.com/barchart/barchart-common-node-js"
-  },
-  "keywords": [
-    "Barchart",
-    "Utilities",
-    "JavaScript",
-    "Node.js"
-  ],
+
   "dependencies": {
     "@barchart/common-js": "^4.66.1",
     "@barchart/marketdata-api-js": "^6.2.5",
     "aws-sdk": "^2.821.0",
     "body-parser": "1.15.2",
     "client-sessions": "0.7.0",
-    "express": "4.14.0",
-    "express-handlebars": "3.0.0",
-    "express-http-proxy": "0.10.1",
+    "express": "4.18.2",
+    "express-handlebars": "7.1.2",
+    "express-http-proxy": "2.1.1",
     "http-digest-client": "0.0.3",
-    "log4js": "^5.3.0",
-    "moment": "^2.29.1",
-    "moment-timezone": "^0.5.34",
-    "multer": "1.2.1",
+    "log4js": "^6.9.1",
+    "moment": "^2.29.4",
+    "moment-timezone": "^0.5.45",
+    "multer": "^1.4.5",
     "node-yaml-config": "0.0.4",
-    "nodemailer": "^6.3.0",
+    "nodemailer": "^6.9.8",
     "numeral": "^2.0.6",
-    "socket.io": "2.3.0",
-    "twilio": "^3.43.0",
+    "socket.io": "^4.7.5",
+    "twilio": "^4.23.0",
     "uuid": "^9.0.1",
-    "xml2js": "0.4.17"
+    "xml2js": "^0.6.2"
   },
+
   "devDependencies": {
-    "git-get-status": "^1.0.5",
     "gulp": "^4.0.2",
-    "gulp-git": "^2.10.1",
     "gulp-jshint": "^2.1.0",
-    "gulp-prompt": "^1.2.0",
-    "jasmine": "^4.0.2",
-    "jshint": "^2.12.0"
+    "jasmine": "^5.1.0",
+    "jshint": "^2.13.5"
   },
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/barchart/barchart-common-node-js/issues"
-  },
-  "homepage": "https://github.com/barchart/barchart-common-node-js#readme",
-  "directories": {
-    "test": "test"
-  }
+
+  "keywords": [
+    "Node.js",
+    "Express",
+    "Docker",
+    "Kubernetes",
+    "GKE"
+  ],
+
+  "author": "Barchart",
+  "license": "MIT"
 }
