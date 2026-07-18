@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: common-node-js
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: common-node-js
+  template:
+    metadata:
+      labels:
+        app: common-node-js
+    spec:
+      containers:
+      - name: common-node-js
+        image: REGION-docker.pkg.dev/PROJECT-ID/repository/common-node-js:1.0.9
+        ports:
+        - containerPort: 3000
