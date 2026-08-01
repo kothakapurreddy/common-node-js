@@ -31,6 +31,8 @@ jobs:
 
       - name: Setup Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: 'gke-gcloud-auth-plugin'
 
       - name: Configure Docker
         run: |
@@ -38,18 +40,21 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build \
-          -t us-east1-docker.pkg.dev/healthcare-488108/sanjeev/nodejs-app:${{ github.sha }} .
+          docker build -t us-east1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
 
       - name: Push Docker Image
         run: |
-          docker push us-east1-docker.pkg.dev/healthcare-488108/sanjeev/nodejs-app:${{ github.sha }}
+          docker push us-east1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Get GKE Credentials
         run: |
-          gcloud container clusters get-credentials $GKE_CLUSTER \
-            --region $GKE_LOCATION \
-            --project $PROJECT_ID
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --region ${{ env.GKE_LOCATION }} \
+            --project ${{ env.PROJECT_ID }}
+
+      - name: Use GKE Auth Plugin
+        run: |
+          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
 
       - name: Deploy to GKE
         run: |
@@ -59,3 +64,5 @@ jobs:
       - name: Verify Deployment
         run: |
           kubectl rollout status deployment/nodejs-app
+          kubectl get pods
+          kubectl get svc
