@@ -32,6 +32,12 @@ jobs:
       - name: Setup Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Install GKE Auth Plugin
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-cloud-cli-gke-gcloud-auth-plugin
+          gke-gcloud-auth-plugin --version
+
       - name: Configure Docker
         run: |
           gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
@@ -45,23 +51,30 @@ jobs:
           docker push us-east1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Get GKE Credentials
-        uses: google-github-actions/get-gke-credentials@v2
-        with:
-          cluster_name: ravicluster
-          location: us-east1
-          project_id: healthcare-488108
+        env:
+          USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --region ${{ env.GKE_LOCATION }} \
+            --project ${{ env.PROJECT_ID }}
 
       - name: Verify Cluster
+        env:
+          USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
         run: |
           kubectl cluster-info
           kubectl get nodes
 
       - name: Deploy to GKE
+        env:
+          USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
         run: |
           kubectl apply -f deployment.yaml
           kubectl apply -f service.yaml
 
       - name: Verify Deployment
+        env:
+          USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
         run: |
           kubectl rollout status deployment/nodejs-app
           kubectl get pods
