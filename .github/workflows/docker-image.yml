@@ -17,8 +17,8 @@ jobs:
       GAR_LOCATION: us-east1
       GAR_REPOSITORY: sanjeev
       IMAGE_NAME: nodejs-app
-      GKE_CLUSTER: YOUR_GKE_CLUSTER_NAME
-      GKE_LOCATION: YOUR_GKE_CLUSTER_REGION
+      GKE_CLUSTER: Ravi_Cluster
+      GKE_LOCATION: us-east1
 
     steps:
       - name: Checkout Source
