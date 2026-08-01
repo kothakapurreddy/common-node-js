@@ -58,4 +58,3 @@ jobs:
       - name: Verify Deployment
         run: |
           kubectl rollout status deployment/nodejs-app
-```
