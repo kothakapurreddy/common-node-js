@@ -17,7 +17,7 @@ jobs:
       GAR_LOCATION: us-east1
       GAR_REPOSITORY: sanjeev
       IMAGE_NAME: nodejs-app
-      GKE_CLUSTER: Ravi_Cluster
+      GKE_CLUSTER: ravicluster
       GKE_LOCATION: us-east1
 
     steps:
