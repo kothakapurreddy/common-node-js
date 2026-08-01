@@ -2,11 +2,10 @@ name: Build and Deploy to GKE
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     permissions:
@@ -17,65 +16,28 @@ jobs:
       GAR_LOCATION: us-east1
       GAR_REPOSITORY: sanjeev
       IMAGE_NAME: nodejs-app
-      GKE_CLUSTER: ravicluster
-      GKE_LOCATION: us-east1
 
     steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-      - name: Setup Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Install GKE Auth Plugin
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y google-cloud-cli-gke-gcloud-auth-plugin
-          gke-gcloud-auth-plugin --version
+      - run: gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
 
-      - name: Configure Docker
-        run: |
-          gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+      - run: |
+          docker build -t us-east1-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$IMAGE_NAME:${{ github.sha }} .
+          docker push us-east1-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$IMAGE_NAME:${{ github.sha }}
 
-      - name: Build Docker Image
-        run: |
-          docker build -t us-east1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ravicluster
+          location: us-east1
+          project_id: healthcare-488108
 
-      - name: Push Docker Image
-        run: |
-          docker push us-east1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+      - run: kubectl apply -f deployment.yaml
 
-      - name: Get GKE Credentials
-        env:
-          USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
-        run: |
-          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
-            --region ${{ env.GKE_LOCATION }} \
-            --project ${{ env.PROJECT_ID }}
-
-      - name: Verify Cluster
-        env:
-          USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
-        run: |
-          kubectl cluster-info
-          kubectl get nodes
-
-      - name: Deploy to GKE
-        env:
-          USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
-        run: |
-          kubectl apply -f deployment.yaml
-          kubectl apply -f service.yaml
-
-      - name: Verify Deployment
-        env:
-          USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
-        run: |
-          kubectl rollout status deployment/nodejs-app
-          kubectl get pods
-          kubectl get svc
+      - run: kubectl apply -f service.yaml
