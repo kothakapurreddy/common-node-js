@@ -5,7 +5,7 @@
 
 A *public* library of JavaScript utilities — suitable for use in both Node.js environments.
 
-### Overview
+### Overviews
 
 #### Features
 
