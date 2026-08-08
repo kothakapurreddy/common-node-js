@@ -4,210 +4,131 @@ pipeline {
 
     environment {
 
-        IMAGE_NAME = "common-node-js"
-        IMAGE_TAG  = "1.0.${BUILD_NUMBER}"
+        // GCP
+        GCP_PROJECT = 'healthcare-488108'
+        GCP_REGION  = 'asia-south1-c'
 
-        PROJECT_ID = "healthcare-488108"
-        REGION     = "us-east1"
+        // Artifact Registry
+        GAR_REPOSITORY = 'devops-repo'
+        IMAGE_NAME     = 'java-app'
 
-        REPOSITORY = "raviregistry"
+        // GKE
+        GKE_CLUSTER = 'devops-gke'
+        GKE_ZONE    = 'asia-south1-c'
 
-        IMAGE_URI = "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:${IMAGE_TAG}"
-
-
-        // GCP Authentication
-        GOOGLE_APPLICATION_CREDENTIALS = "C:/gcp/service-account.json"
-
-        GCLOUD = "C:/Users/krred/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd"
-
-
-        // GKE Details
-        CLUSTER_NAME = "ravi-cluster-1"
-
-        CLUSTER_LOCATION = "us-central1"
-
-        NAMESPACE = "default"
-
+        // Jenkins Credential
+        GOOGLE_APPLICATION_CREDENTIALS =
+            credentials('service-account')
     }
-
 
     stages {
 
-
-        stage('Checkout Code') {
-
+        stage('Maven Build') {
             steps {
-
-                git branch: 'master',
-                url: 'https://github.com/kothakapurreddy/common-node-js.git'
-
-            }
-        }
-
-
-
-        stage('Authenticate GCP') {
-
-            steps {
-
-                bat '''
-                "%GCLOUD%" auth activate-service-account --key-file=%GOOGLE_APPLICATION_CREDENTIALS%
-
-                "%GCLOUD%" config set project %PROJECT_ID%
-
-                "%GCLOUD%" auth configure-docker %REGION%-docker.pkg.dev --quiet
+                sh '''
+                    mvn clean package -DskipTests
                 '''
-
             }
         }
 
-
-
-
-        stage('Build Docker Image') {
-
+        stage('Maven Test') {
             steps {
-
-                bat '''
-                docker build -t %IMAGE_URI% .
+                sh '''
+                    mvn test
                 '''
-
             }
         }
 
-
-
-
-        stage('Push Docker Image') {
-
+        stage('Docker Build') {
             steps {
-
-                bat '''
-                docker push %IMAGE_URI%
+                sh '''
+                    docker build \
+                    -t ${IMAGE_NAME}:${BUILD_NUMBER} .
                 '''
-
             }
         }
 
-
-
-
-
-        stage('Connect To GKE Cluster') {
-
+        stage('GCP Authentication') {
             steps {
+                sh '''
+                    gcloud auth activate-service-account \
+                      --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
 
-                bat '''
-                "%GCLOUD%" container clusters get-credentials %CLUSTER_NAME% --region %CLUSTER_LOCATION% --project %PROJECT_ID%
+                    gcloud config set project "$GCP_PROJECT"
                 '''
-
             }
         }
 
-
-
-
-
-        stage('Create Kubernetes Deployment') {
-
+        stage('Docker Authentication') {
             steps {
-
-                bat '''
-
-                kubectl apply -f deployment.yaml
-
+                sh '''
+                    gcloud auth configure-docker \
+                      ${GCP_REGION}-docker.pkg.dev \
+                      --quiet
                 '''
-
             }
-
         }
 
-
-
-
-        stage('Update Image') {
-
+        stage('Push Image to Artifact Registry') {
             steps {
+                sh '''
+                    docker tag \
+                    ${IMAGE_NAME}:${BUILD_NUMBER} \
+                    ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}
 
-                bat '''
-
-                kubectl set image deployment/common-node-js \
-                common-node-js=%IMAGE_URI% \
-                -n %NAMESPACE%
-
+                    docker push \
+                    ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}
                 '''
-
             }
-
         }
 
+        stage('GKE Authentication') {
+            steps {
+                sh '''
+                    gcloud container clusters get-credentials \
+                      "$GKE_CLUSTER" \
+                      --zone "$GKE_ZONE" \
+                      --project "$GCP_PROJECT"
+                '''
+            }
+        }
 
+        stage('Deploy to GKE') {
+            steps {
+                sh '''
+                    sed "s|IMAGE_PLACEHOLDER|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}|g" \
+                    k8s/deployment.yaml > k8s/deployment-final.yaml
 
+                    kubectl apply -f k8s/deployment-final.yaml
 
+                    kubectl rollout status deployment/java-app
+                '''
+            }
+        }
 
         stage('Verify Deployment') {
-
             steps {
-
-                bat '''
-
-                kubectl get pods -n %NAMESPACE%
-
-                kubectl get svc -n %NAMESPACE%
-
+                sh '''
+                    kubectl get pods
+                    kubectl get services
+                    kubectl get deployment
                 '''
-
             }
-
         }
-
-
     }
-
-
-
 
     post {
 
-
         success {
-
-            echo """
-            ======================================
-            DEPLOYMENT SUCCESSFUL
-
-            Image:
-            ${IMAGE_URI}
-
-            Cluster:
-            ${CLUSTER_NAME}
-
-            ======================================
-            """
-
+            echo 'CI/CD pipeline completed successfully!'
         }
-
 
         failure {
-
-            echo """
-            ======================================
-            DEPLOYMENT FAILED
-
-            Check Jenkins Console Logs
-
-            ======================================
-            """
-
+            echo 'CI/CD pipeline failed!'
         }
-
 
         always {
-
-            echo "Pipeline Completed"
-
+            echo "Build Number: ${BUILD_NUMBER}"
         }
-
     }
-
 }
