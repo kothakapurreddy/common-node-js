@@ -23,22 +23,6 @@ pipeline {
 
     stages {
 
-        stage('Maven Build') {
-            steps {
-                sh '''
-                    mvn clean package -DskipTests
-                '''
-            }
-        }
-
-        stage('Maven Test') {
-            steps {
-                sh '''
-                    mvn test
-                '''
-            }
-        }
-
         stage('Docker Build') {
             steps {
                 sh '''
