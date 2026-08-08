@@ -17,10 +17,10 @@ pipeline {
         IMAGE_NAME     = 'java-app'
 
         // ==============================
-        // GKE
+        // GKE - Regional Cluster
         // ==============================
         GKE_CLUSTER = 'devops-gke'
-        GKE_ZONE    = 'asia-south1'
+        GKE_REGION  = 'asia-south1'
 
         // ==============================
         // Jenkins GCP Credential
@@ -32,7 +32,7 @@ pipeline {
     stages {
 
         // ==========================================
-        // 1. Checkout Code
+        // 1. Checkout
         // ==========================================
         stage('Checkout') {
             steps {
@@ -46,12 +46,14 @@ pipeline {
         stage('Docker Build') {
             steps {
                 sh '''
+                    set -e
+
                     echo "Building Docker image..."
 
                     docker build \
                       -t ${IMAGE_NAME}:${BUILD_NUMBER} .
 
-                    echo "Docker image:"
+                    echo "Docker image created:"
                     docker images | grep ${IMAGE_NAME}
                 '''
             }
@@ -63,6 +65,8 @@ pipeline {
         stage('GCP Authentication') {
             steps {
                 sh '''
+                    set -e
+
                     echo "Authenticating with GCP..."
 
                     gcloud auth activate-service-account \
@@ -80,12 +84,14 @@ pipeline {
         }
 
         // ==========================================
-        // 4. Docker → Artifact Registry Authentication
+        // 4. Docker Authentication
         // ==========================================
         stage('Docker Authentication') {
             steps {
                 sh '''
-                    echo "Configuring Docker authentication..."
+                    set -e
+
+                    echo "Configuring Docker for Artifact Registry..."
 
                     gcloud auth configure-docker \
                       ${GCP_REGION}-docker.pkg.dev \
@@ -95,11 +101,13 @@ pipeline {
         }
 
         // ==========================================
-        // 5. Push Docker Image
+        // 5. Push Image to Artifact Registry
         // ==========================================
         stage('Push Image to Artifact Registry') {
             steps {
                 sh '''
+                    set -e
+
                     IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
 
                     echo "Image URI:"
@@ -112,6 +120,8 @@ pipeline {
                     echo "Pushing image..."
 
                     docker push "$IMAGE_URI"
+
+                    echo "Image pushed successfully."
                 '''
             }
         }
@@ -122,6 +132,8 @@ pipeline {
         stage('Verify Artifact Registry') {
             steps {
                 sh '''
+                    set -e
+
                     echo "Checking Artifact Registry..."
 
                     gcloud artifacts docker images list \
@@ -137,11 +149,21 @@ pipeline {
         stage('GKE Authentication') {
             steps {
                 sh '''
+                    set -e
+
+                    echo "Checking GKE cluster status..."
+
+                    gcloud container clusters describe \
+                      "$GKE_CLUSTER" \
+                      --region "$GKE_REGION" \
+                      --project "$GCP_PROJECT" \
+                      --format="value(status)"
+
                     echo "Getting GKE credentials..."
 
                     gcloud container clusters get-credentials \
                       "$GKE_CLUSTER" \
-                      --zone "$GKE_ZONE" \
+                      --region "$GKE_REGION" \
                       --project "$GCP_PROJECT"
 
                     echo "Checking GKE access..."
@@ -157,6 +179,8 @@ pipeline {
         stage('Deploy to GKE') {
             steps {
                 sh '''
+                    set -e
+
                     IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
 
                     echo "Deploying image:"
@@ -172,9 +196,10 @@ pipeline {
                         kubectl apply -f k8s/service.yaml
                     fi
 
-                    echo "Waiting for rollout..."
+                    echo "Waiting for deployment rollout..."
 
-                    kubectl rollout status deployment/java-app
+                    kubectl rollout status deployment/java-app \
+                      --timeout=300s
                 '''
             }
         }
@@ -185,13 +210,15 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 sh '''
-                    echo "===== PODS ====="
+                    set -e
+
+                    echo "========== PODS =========="
                     kubectl get pods -o wide
 
-                    echo "===== DEPLOYMENT ====="
+                    echo "========== DEPLOYMENT =========="
                     kubectl get deployment
 
-                    echo "===== SERVICES ====="
+                    echo "========== SERVICES =========="
                     kubectl get services
                 '''
             }
@@ -201,17 +228,21 @@ pipeline {
     post {
 
         success {
-            echo '========================================'
-            echo 'CI/CD PIPELINE COMPLETED SUCCESSFULLY'
-            echo 'Application deployed to GKE'
-            echo '========================================'
+            echo '''
+========================================
+CI/CD PIPELINE COMPLETED SUCCESSFULLY
+Application deployed to GKE
+========================================
+'''
         }
 
         failure {
-            echo '========================================'
-            echo 'CI/CD PIPELINE FAILED'
-            echo 'Check the failed stage and logs'
-            echo '========================================'
+            echo '''
+========================================
+CI/CD PIPELINE FAILED
+Check the failed stage and logs
+========================================
+'''
         }
 
         always {
