@@ -4,24 +4,45 @@ pipeline {
 
     environment {
 
+        // ==============================
         // GCP
+        // ==============================
         GCP_PROJECT = 'healthcare-488108'
         GCP_REGION  = 'asia-south1'
 
+        // ==============================
         // Artifact Registry
+        // ==============================
         GAR_REPOSITORY = 'devops-repo'
         IMAGE_NAME     = 'java-app'
 
+        // ==============================
         // GKE
+        // ==============================
         GKE_CLUSTER = 'devops-gke'
-        GKE_ZONE    = 'asia-south1-c'
+        GKE_ZONE    = 'asia-south1'
 
-        // Jenkins → GCP Service Account
+        // ==============================
+        // Jenkins GCP Credential
+        // ==============================
         GOOGLE_APPLICATION_CREDENTIALS =
             credentials('service-account')
     }
 
     stages {
+
+        // ==========================================
+        // 1. Checkout Code
+        // ==========================================
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        // ==========================================
+        // 2. Docker Build
+        // ==========================================
         stage('Docker Build') {
             steps {
                 sh '''
@@ -30,12 +51,15 @@ pipeline {
                     docker build \
                       -t ${IMAGE_NAME}:${BUILD_NUMBER} .
 
-                    echo "Docker image created:"
+                    echo "Docker image:"
                     docker images | grep ${IMAGE_NAME}
                 '''
             }
         }
 
+        // ==========================================
+        // 3. GCP Authentication
+        // ==========================================
         stage('GCP Authentication') {
             steps {
                 sh '''
@@ -55,6 +79,9 @@ pipeline {
             }
         }
 
+        // ==========================================
+        // 4. Docker → Artifact Registry Authentication
+        // ==========================================
         stage('Docker Authentication') {
             steps {
                 sh '''
@@ -67,27 +94,35 @@ pipeline {
             }
         }
 
+        // ==========================================
+        // 5. Push Docker Image
+        // ==========================================
         stage('Push Image to Artifact Registry') {
             steps {
                 sh '''
-                    echo "Tagging Docker image..."
+                    IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
+
+                    echo "Image URI:"
+                    echo "$IMAGE_URI"
 
                     docker tag \
                       ${IMAGE_NAME}:${BUILD_NUMBER} \
-                      ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}
+                      "$IMAGE_URI"
 
-                    echo "Pushing image to Artifact Registry..."
+                    echo "Pushing image..."
 
-                    docker push \
-                      ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}
+                    docker push "$IMAGE_URI"
                 '''
             }
         }
 
-        stage('Verify Artifact Registry Image') {
+        // ==========================================
+        // 6. Verify Artifact Registry
+        // ==========================================
+        stage('Verify Artifact Registry') {
             steps {
                 sh '''
-                    echo "Verifying image in Artifact Registry..."
+                    echo "Checking Artifact Registry..."
 
                     gcloud artifacts docker images list \
                       ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY} \
@@ -96,10 +131,13 @@ pipeline {
             }
         }
 
+        // ==========================================
+        // 7. GKE Authentication
+        // ==========================================
         stage('GKE Authentication') {
             steps {
                 sh '''
-                    echo "Authenticating with GKE..."
+                    echo "Getting GKE credentials..."
 
                     gcloud container clusters get-credentials \
                       "$GKE_CLUSTER" \
@@ -113,15 +151,20 @@ pipeline {
             }
         }
 
+        // ==========================================
+        // 8. Deploy to GKE
+        // ==========================================
         stage('Deploy to GKE') {
             steps {
                 sh '''
-                    echo "Updating Kubernetes image..."
+                    IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
 
-                    sed "s|IMAGE_PLACEHOLDER|${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}|g" \
-                      k8s/deployment.yaml > k8s/deployment-final.yaml
+                    echo "Deploying image:"
+                    echo "$IMAGE_URI"
 
-                    echo "Deploying application..."
+                    sed "s|IMAGE_PLACEHOLDER|${IMAGE_URI}|g" \
+                      k8s/deployment.yaml \
+                      > k8s/deployment-final.yaml
 
                     kubectl apply -f k8s/deployment-final.yaml
 
@@ -129,23 +172,26 @@ pipeline {
                         kubectl apply -f k8s/service.yaml
                     fi
 
-                    echo "Waiting for deployment..."
+                    echo "Waiting for rollout..."
 
                     kubectl rollout status deployment/java-app
                 '''
             }
         }
 
+        // ==========================================
+        // 9. Verify Deployment
+        // ==========================================
         stage('Verify Deployment') {
             steps {
                 sh '''
-                    echo "Pods:"
+                    echo "===== PODS ====="
                     kubectl get pods -o wide
 
-                    echo "Deployment:"
+                    echo "===== DEPLOYMENT ====="
                     kubectl get deployment
 
-                    echo "Services:"
+                    echo "===== SERVICES ====="
                     kubectl get services
                 '''
             }
@@ -155,17 +201,17 @@ pipeline {
     post {
 
         success {
-            echo '======================================'
-            echo 'CI/CD PIPELINE SUCCESSFUL'
+            echo '========================================'
+            echo 'CI/CD PIPELINE COMPLETED SUCCESSFULLY'
             echo 'Application deployed to GKE'
-            echo '======================================'
+            echo '========================================'
         }
 
         failure {
-            echo '======================================'
+            echo '========================================'
             echo 'CI/CD PIPELINE FAILED'
-            echo 'Check the failed stage and Jenkins logs'
-            echo '======================================'
+            echo 'Check the failed stage and logs'
+            echo '========================================'
         }
 
         always {
