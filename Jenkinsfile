@@ -36,43 +36,6 @@ pipeline {
 
     stages {
 
-        // ==========================================
-        // 1. Checkout
-        // ==========================================
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        // ==========================================
-        // 2. Validate Tools
-        // ==========================================
-        stage('Validate Tools') {
-            steps {
-                sh '''
-                    set -e
-
-                    echo "===== Java ====="
-                    java -version
-
-                    echo "===== Maven ====="
-                    mvn -version
-
-                    echo "===== Docker ====="
-                    docker --version
-
-                    echo "===== gcloud ====="
-                    gcloud --version
-
-                    echo "===== kubectl ====="
-                    kubectl version --client
-
-                    echo "===== Helm ====="
-                    helm version
-                '''
-            }
-        }
 
         // ==========================================
         // 3. Maven Build
