@@ -23,6 +23,11 @@ pipeline {
         GKE_REGION  = 'asia-south1'
 
         // ==============================
+        // Kubernetes / Helm
+        // ==============================
+        K8S_NAMESPACE = 'dev'
+
+        // ==============================
         // Jenkins GCP Credential
         // ==============================
         GOOGLE_APPLICATION_CREDENTIALS =
@@ -31,9 +36,63 @@ pipeline {
 
     stages {
 
+        // ==========================================
+        // 1. Checkout
+        // ==========================================
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
 
         // ==========================================
-        // 2. Docker Build
+        // 2. Validate Tools
+        // ==========================================
+        stage('Validate Tools') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "===== Java ====="
+                    java -version
+
+                    echo "===== Maven ====="
+                    mvn -version
+
+                    echo "===== Docker ====="
+                    docker --version
+
+                    echo "===== gcloud ====="
+                    gcloud --version
+
+                    echo "===== kubectl ====="
+                    kubectl version --client
+
+                    echo "===== Helm ====="
+                    helm version
+                '''
+            }
+        }
+
+        // ==========================================
+        // 3. Maven Build
+        // ==========================================
+        stage('Maven Build') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "Building Java application..."
+
+                    mvn clean package -DskipTests
+
+                    echo "Maven build completed successfully."
+                '''
+            }
+        }
+
+        // ==========================================
+        // 4. Docker Build
         // ==========================================
         stage('Docker Build') {
             steps {
@@ -52,7 +111,7 @@ pipeline {
         }
 
         // ==========================================
-        // 3. GCP Authentication
+        // 5. GCP Authentication
         // ==========================================
         stage('GCP Authentication') {
             steps {
@@ -76,7 +135,7 @@ pipeline {
         }
 
         // ==========================================
-        // 4. Docker Authentication
+        // 6. Docker Authentication
         // ==========================================
         stage('Docker Authentication') {
             steps {
@@ -93,7 +152,7 @@ pipeline {
         }
 
         // ==========================================
-        // 5. Push Image to Artifact Registry
+        // 7. Push Image to Artifact Registry
         // ==========================================
         stage('Push Image to Artifact Registry') {
             steps {
@@ -119,7 +178,7 @@ pipeline {
         }
 
         // ==========================================
-        // 6. Verify Artifact Registry
+        // 8. Verify Artifact Registry
         // ==========================================
         stage('Verify Artifact Registry') {
             steps {
@@ -129,14 +188,14 @@ pipeline {
                     echo "Checking Artifact Registry..."
 
                     gcloud artifacts docker images list \
-                      ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY} \
+                      ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME} \
                       --include-tags
                 '''
             }
         }
 
         // ==========================================
-        // 7. GKE Authentication
+        // 9. GKE Authentication
         // ==========================================
         stage('GKE Authentication') {
             steps {
@@ -145,11 +204,18 @@ pipeline {
 
                     echo "Checking GKE cluster status..."
 
-                    gcloud container clusters describe \
+                    STATUS=$(gcloud container clusters describe \
                       "$GKE_CLUSTER" \
                       --region "$GKE_REGION" \
                       --project "$GCP_PROJECT" \
-                      --format="value(status)"
+                      --format="value(status)")
+
+                    echo "GKE Cluster Status: $STATUS"
+
+                    if [ "$STATUS" != "RUNNING" ]; then
+                        echo "ERROR: GKE cluster is not RUNNING."
+                        exit 1
+                    fi
 
                     echo "Getting GKE credentials..."
 
@@ -166,38 +232,90 @@ pipeline {
         }
 
         // ==========================================
-        // 8. Deploy to GKE
+        // 10. Helm Validate
         // ==========================================
-        stage('Deploy to GKE') {
+        stage('Helm Validate') {
             steps {
                 sh '''
                     set -e
 
-                    IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
+                    echo "Validating Helm chart..."
 
-                    echo "Deploying image:"
-                    echo "$IMAGE_URI"
+                    helm lint ./helm/java-app
 
-                    sed "s|IMAGE_PLACEHOLDER|${IMAGE_URI}|g" \
-                      k8s/deployment.yaml \
-                      > k8s/deployment-final.yaml
+                    echo "Rendering Helm templates..."
 
-                    kubectl apply -f k8s/deployment-final.yaml
+                    helm template java-app ./helm/java-app \
+                      --namespace "$K8S_NAMESPACE" \
+                      --values ./helm/java-app/values-dev.yaml
 
-                    if [ -f k8s/service.yaml ]; then
-                        kubectl apply -f k8s/service.yaml
-                    fi
-
-                    echo "Waiting for deployment rollout..."
-
-                    kubectl rollout status deployment/java-app \
-                      --timeout=300s
+                    echo "Helm validation completed."
                 '''
             }
         }
 
         // ==========================================
-        // 9. Verify Deployment
+        // 11. Deploy using Helm
+        // ==========================================
+        stage('Helm Deploy to GKE') {
+            steps {
+                sh '''
+                    set -e
+
+                    IMAGE_REPOSITORY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GAR_REPOSITORY}/${IMAGE_NAME}"
+
+                    echo "========================================"
+                    echo "Deploying with Helm"
+                    echo "========================================"
+
+                    echo "Image Repository:"
+                    echo "$IMAGE_REPOSITORY"
+
+                    echo "Image Tag:"
+                    echo "$BUILD_NUMBER"
+
+                    echo "Namespace:"
+                    echo "$K8S_NAMESPACE"
+
+                    helm upgrade --install java-app \
+                      ./helm/java-app \
+                      --namespace "$K8S_NAMESPACE" \
+                      --create-namespace \
+                      --values ./helm/java-app/values-dev.yaml \
+                      --set image.repository="$IMAGE_REPOSITORY" \
+                      --set image.tag="$BUILD_NUMBER" \
+                      --wait \
+                      --timeout 5m \
+                      --atomic
+
+                    echo "Helm deployment completed successfully."
+                '''
+            }
+        }
+
+        // ==========================================
+        // 12. Helm Status
+        // ==========================================
+        stage('Helm Status') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "========== HELM RELEASE =========="
+
+                    helm status java-app \
+                      --namespace "$K8S_NAMESPACE"
+
+                    echo "========== HELM LIST =========="
+
+                    helm list \
+                      --namespace "$K8S_NAMESPACE"
+                '''
+            }
+        }
+
+        // ==========================================
+        // 13. Verify Deployment
         // ==========================================
         stage('Verify Deployment') {
             steps {
@@ -205,13 +323,26 @@ pipeline {
                     set -e
 
                     echo "========== PODS =========="
-                    kubectl get pods -o wide
+
+                    kubectl get pods \
+                      --namespace "$K8S_NAMESPACE" \
+                      -o wide
 
                     echo "========== DEPLOYMENT =========="
-                    kubectl get deployment
+
+                    kubectl get deployment \
+                      --namespace "$K8S_NAMESPACE"
 
                     echo "========== SERVICES =========="
-                    kubectl get services
+
+                    kubectl get services \
+                      --namespace "$K8S_NAMESPACE"
+
+                    echo "========== HPA =========="
+
+                    kubectl get hpa \
+                      --namespace "$K8S_NAMESPACE" \
+                      || true
                 '''
             }
         }
@@ -223,8 +354,8 @@ pipeline {
             echo '''
 ========================================
 CI/CD PIPELINE COMPLETED SUCCESSFULLY
-Application deployed to GKE
 ========================================
+Application deployed to GKE using Helm
 '''
         }
 
@@ -232,13 +363,16 @@ Application deployed to GKE
             echo '''
 ========================================
 CI/CD PIPELINE FAILED
-Check the failed stage and logs
 ========================================
+Check the failed Jenkins stage and logs
 '''
         }
 
         always {
             echo "Build Number: ${BUILD_NUMBER}"
+            echo "GCP Project: ${GCP_PROJECT}"
+            echo "GKE Cluster: ${GKE_CLUSTER}"
+            echo "Kubernetes Namespace: ${K8S_NAMESPACE}"
         }
     }
 }
