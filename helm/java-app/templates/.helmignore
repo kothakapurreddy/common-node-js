@@ -1,0 +1,8 @@
+.git/
+.gitignore
+.DS_Store
+*.tmp
+*.log
+README.md
+Jenkinsfile
+Dockerfile
