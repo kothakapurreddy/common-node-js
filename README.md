@@ -7,7 +7,7 @@ A *public* library of JavaScript utilities — suitable for use in both Node.js 
 
 ### Overviews
 
-### Features
+#### Features
 
 * Promise-based convenience wrappers for the AWS services (e.g. DynamoDB, S3, SES, SNS, SQS, more)
 * Promise-based convenience wrappers for relational dB access (PostgreSQL, MySQL)
