@@ -20,7 +20,7 @@ pipeline {
         // GKE - Regional Cluster
         // ==============================
         GKE_CLUSTER = 'devops-gke'
-        GKE_REGION  = 'asia-south1'
+        GKE_REGION  = 'us-central1'
 
         // ==============================
         // Kubernetes / Helm
