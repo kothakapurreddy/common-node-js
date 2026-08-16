@@ -1,1 +1,18 @@
-{\rtf1}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "java-app.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "java-app.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
