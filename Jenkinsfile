@@ -8,7 +8,7 @@ pipeline {
         // GCP
         // ==============================
         GCP_PROJECT = 'healthcare-488108'
-        GCP_REGION  = 'asia-south1'
+        GCP_REGION  = 'us-central1'
 
         // ==============================
         // Artifact Registry
@@ -26,19 +26,11 @@ pipeline {
         // Jenkins GCP Credential
         // ==============================
         GOOGLE_APPLICATION_CREDENTIALS =
-            credentials('service-account')
+            credentials('gcp-service-account')
     }
 
     stages {
 
-        // ==========================================
-        // 1. Checkout
-        // ==========================================
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
         // ==========================================
         // 2. Docker Build
