@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ include "java-app.fullname" . }}
+  labels:
+    {{- include "java-app.labels" . | nindent 4 }}
+
+spec:
+  replicas: {{ .Values.replicaCount }}
+
+  selector:
+    matchLabels:
+      {{- include "java-app.selectorLabels" . | nindent 6 }}
+
+  template:
+    metadata:
+      labels:
+        {{- include "java-app.selectorLabels" . | nindent 8 }}
+
+    spec:
+      serviceAccountName: {{ include "java-app.serviceAccountName" . }}
+
+      containers:
+        - name: java-app
+
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+
+          env:
+            - name: APP_ENV
+              value: {{ .Values.env.APP_ENV | quote }}
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
